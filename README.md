@@ -1,7 +1,7 @@
 trello-hipchat-bot
 ==================
 
-This bot is designed to be run as a free Heroku project. You will need to set a few environment variables, for example:
+This bot is designed to be run as a free Heroku project. As with any good [12 Factor App](http://www.12factor.net/config), you will need to set a few environment variables. For example:
 
 ```bash
 heroku config:set --app my-new-heroku-app \
