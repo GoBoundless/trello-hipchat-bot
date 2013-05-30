@@ -18,3 +18,12 @@ It runs as a worker process with no exposure to the web.
 heroku ps:scale web=0 --app my-new-heroku-app
 heroku ps:scale worker=1 --app my-new-heroku-app
 ```
+
+Contributing
+------------
+
+1. Fork it.
+2. Create a branch
+3. Commit your changes
+4. Push to the branch
+5. Open a Pull Request
