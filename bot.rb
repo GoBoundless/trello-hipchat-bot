@@ -51,6 +51,9 @@ class Bot
               "#{action.member_creator.full_name} added \"#{action.data['checkItem']['name']}\" to #{card_link}"
             end
 
+          when :commentCard 
+            "#{action.member_creator.full_name} commented on #{card_link}: #{action.data['text']}"
+
           else
             STDERR.puts action.inspect
             ""
