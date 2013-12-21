@@ -16,58 +16,68 @@ class Bot
   def self.run
 
     hipchat = HipChat::Client.new(ENV["HIPCHAT_API_TOKEN"])
-    hipchat_room = hipchat[ENV['HIPCHAT_ROOM']]
-
-    board = Trello::Board.find(ENV["TRELLO_BOARD"])
-
-    scheduler = Rufus::Scheduler.start_new
-
-    last_timestamp = Time.now.utc
 
     dedupe = Dedupe.new
 
+    hipchat_rooms = ENV["HIPCHAT_ROOM"].split(',')
+    boards = ENV["TRELLO_BOARD"].split(',').each_with_index.map {|board, i| [Trello::Board.find(board), hipchat_rooms[i]] }
+    now = Time.now.utc
+    timestamps = {}
+
+    boards.each do |board_with_room|
+      timestamps[board_with_room.first.id] = now
+    end
+
+    scheduler = Rufus::Scheduler.new
+
     scheduler.every '5s' do
       puts "Querying Trello at #{Time.now.to_s}"
-      actions = board.actions(:filter => :all, :since => last_timestamp.iso8601)
-      actions.each do |action|
-        if last_timestamp < action.date
-          card_link = "<a href='https://trello.com/card/#{action.data['board']['id']}/#{action.data['card']['idShort']}'>#{action.data['card']['name']}</a>"
-          message = case action.type.to_sym
-          when :updateCard
-            if action.data['listBefore']
-              "#{action.member_creator.full_name} moved #{card_link} from #{action.data['listBefore']['name']} to #{action.data['listAfter']['name']}"
-            end
+      boards.each do |board_with_room|
+        board = board_with_room.first
+        hipchat_room = hipchat[board_with_room.last]
+        last_timestamp = timestamps[board.id]
+        actions = board.actions(:filter => :all, :since => last_timestamp.iso8601)
+        actions.each do |action|
+          if last_timestamp < action.date
+            board_link = "<a href='https://trello.com/board/#{action.data['board']['id']}'>#{action.data['board']['name']}</a>"
+            card_link = "#{board_link} : <a href='https://trello.com/card/#{action.data['board']['id']}/#{action.data['card']['idShort']}'>#{action.data['card']['name']}</a>"
+            message = case action.type.to_sym
+            when :updateCard
+              if action.data['listBefore']
+                "#{action.member_creator.full_name} moved #{card_link} from #{action.data['listBefore']['name']} to #{action.data['listAfter']['name']}"
+              end
 
-          when :createCard
-            "#{action.member_creator.full_name} added #{card_link} to #{action.data['list']['name']}"
+            when :createCard
+              "#{action.member_creator.full_name} added #{card_link} to #{action.data['list']['name']}"
 
-          when :moveCardToBoard
-            "#{action.member_creator.full_name} moved #{card_link} from the #{action.data['boardSource']['name']} board to #{action.data['board']['name']}"
+            when :moveCardToBoard
+              "#{action.member_creator.full_name} moved #{card_link} from the #{action.data['boardSource']['name']} board to #{action.data['board']['name']}"
 
-          when :updateCheckItemStateOnCard
-            if action.data["checkItem"]["state"] == 'complete'
-              "#{action.member_creator.full_name} checked off \"#{ action.data['checkItem']['name']}\" on #{card_link}"
+            when :updateCheckItemStateOnCard
+              if action.data["checkItem"]["state"] == 'complete'
+                "#{action.member_creator.full_name} checked off \"#{ action.data['checkItem']['name']}\" on #{card_link}"
+              else
+                "#{action.member_creator.full_name} added \"#{action.data['checkItem']['name']}\" to #{card_link}"
+              end
+
+            when :commentCard
+              "#{action.member_creator.full_name} commented on #{card_link}: #{action.data['text']}"
+
             else
-              "#{action.member_creator.full_name} added \"#{action.data['checkItem']['name']}\" to #{card_link}"
+              STDERR.puts action.inspect
+              ""
             end
 
-          when :commentCard 
-            "#{action.member_creator.full_name} commented on #{card_link}: #{action.data['text']}"
-
-          else
-            STDERR.puts action.inspect
-            ""
-          end
-
-          if dedupe.new? message
-            puts "Sending: #{message}"
-            hipchat_room.send('Trello', message, :color => :purple)
-          else
-            puts "Supressing duplicate message: #{message}"
+            if dedupe.new? message
+              puts "Sending: #{message}"
+              hipchat_room.send('Trello', message, :color => :purple)
+            else
+              puts "Supressing duplicate message: #{message}"
+            end
           end
         end
+        timestamps[board.id] = actions.first.date if actions.length > 0
       end
-      last_timestamp = actions.first.date if actions.length > 0
     end
 
     scheduler.join
