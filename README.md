@@ -22,6 +22,8 @@ heroku ps:scale worker=1 --app my-new-heroku-app
 Contributing
 ------------
 
+**This project isn't actively in use by the original authors. Anyone interested in adopting it should contact @jelder.**
+
 1. Fork it.
 2. Create a branch
 3. Commit your changes
